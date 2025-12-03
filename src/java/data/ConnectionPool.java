@@ -1,22 +1,78 @@
+//package data;
+//
+//import java.sql.*;
+//
+//public class ConnectionPool {
+//
+//    private static ConnectionPool pool = null;
+//
+//    // Constructor private để chặn việc tạo đối tượng từ bên ngoài
+//    private ConnectionPool() {
+//        try {
+//            // Load Driver PostgreSQL
+//            Class.forName("org.postgresql.Driver");
+//        } catch (ClassNotFoundException e) {
+//            System.out.println(e);
+//        }
+//    }
+//
+//    // Singleton: Đảm bảo chỉ có 1 ConnectionPool duy nhất chạy
+//    public static synchronized ConnectionPool getInstance() {
+//        if (pool == null) {
+//            pool = new ConnectionPool();
+//        }
+//        return pool;
+//    }
+//
+//    // Hàm lấy kết nối
+//    public Connection getConnection() {
+//        try {
+//            String dbUrl = "jdbc:postgresql://dpg-d4nq9h15pdvs73ac3hb0-a.singapore-postgres.render.com:5432/render_db_fagx";
+//            String username = "render_db_fagx_user";
+//            String password = "hVrfapv3nbQ2UUTecQDAXpoxDgpr8Mef";
+//
+//            return DriverManager.getConnection(dbUrl, username, password);
+//        } catch (SQLException e) {
+//            System.out.println(e);
+//            return null;
+//        }
+//    }
+//
+//    // Hàm giải phóng kết nối
+//    public void freeConnection(Connection c) {
+//        try {
+//            if (c != null) {
+//                c.close();
+//            }
+//        } catch (SQLException e) {
+//            System.out.println(e);
+//        }
+//    }
+//}
+
 package data;
 
 import java.sql.*;
+import javax.sql.DataSource;
+import javax.naming.InitialContext;
+import javax.naming.NamingException;
 
 public class ConnectionPool {
 
     private static ConnectionPool pool = null;
+    private static DataSource dataSource = null;
 
-    // Constructor private để chặn việc tạo đối tượng từ bên ngoài
+    // Constructor private: Chỉ chạy 1 lần để tìm DataSource từ Tomcat
     private ConnectionPool() {
         try {
-            // Load Driver PostgreSQL
-            Class.forName("org.postgresql.Driver");
-        } catch (ClassNotFoundException e) {
-            System.out.println(e);
+            InitialContext ic = new InitialContext();
+            // Tìm Resource có tên "jdbc/murach" như đã khai báo trong XML
+            dataSource = (DataSource) ic.lookup("java:/comp/env/jdbc/murach");
+        } catch (NamingException e) {
+            System.out.println("Lỗi lookup JNDI: " + e);
         }
     }
 
-    // Singleton: Đảm bảo chỉ có 1 ConnectionPool duy nhất chạy
     public static synchronized ConnectionPool getInstance() {
         if (pool == null) {
             pool = new ConnectionPool();
@@ -24,35 +80,20 @@ public class ConnectionPool {
         return pool;
     }
 
-    // Hàm lấy kết nối
+    // Lấy connection từ DataSource (Pool) chứ không tạo mới thủ công
     public Connection getConnection() {
         try {
-            // --- CẤU HÌNH TỰ ĐỘNG (LOCAL & RENDER) ---
-            String dbUrl = System.getenv("DB_URL");
-            String username = System.getenv("DB_USER");
-            String password = System.getenv("DB_PASS");
-
-            // Nếu không tìm thấy biến môi trường -> Chạy Localhost
-            if (dbUrl == null) {
-                // Sửa lại thông tin này cho đúng với máy bạn nếu cần
-                dbUrl = "jdbc:postgresql://localhost:5432/murach";
-                username = "postgres"; 
-                password = "123"; // Hoặc pass "sesame" tùy bạn đặt
-            }
-            // -------------------------------------------
-
-            return DriverManager.getConnection(dbUrl, username, password);
+            return dataSource.getConnection();
         } catch (SQLException e) {
-            System.out.println(e);
+            System.out.println("Lỗi lấy connection từ Pool: " + e);
             return null;
         }
     }
 
-    // Hàm giải phóng kết nối
     public void freeConnection(Connection c) {
         try {
             if (c != null) {
-                c.close();
+                c.close(); // Trả kết nối về Pool để tái sử dụng
             }
         } catch (SQLException e) {
             System.out.println(e);
